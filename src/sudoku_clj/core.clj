@@ -20,43 +20,47 @@
 
 (defn rows
   [board]
-  "poop")
+  false)
 
 (defn columns
   [board]
-  "poop")
+  false)
 
 (defn three-threes
   [board]
-  "poop")
+  false)
 
 (defn has-9
   [coll]
-  "poop")
+  false)
 
 (defn is-valid-square
   [x]
-  "poop")
+  false)
 
 (defn is-everything-unique
   [x]
-  "poop")
+  false)
 
 (defn is-valid-line
   [line]
-  "poop")
+  false)
 
 (defn are-rows-valid
   [board]
-  "poop")
+  false)
 
 (defn are-columns-valid
   [board]
-  "poop")
+  false)
 
 (defn are-three-threes-valid
   [board]
-  "poop")
+  false)
+
+(defn is-board-valid
+  [board]
+  false)
 
 (defn -main
   "Receive a filename through args and solve the content"
