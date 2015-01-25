@@ -78,7 +78,6 @@
 (defn get-item-sharing-neighbors
   "list of neighbors"
   [board coord item]
-  (println (apply str coord))
   (->> (get-related-squares coord)
        (filter #(contains? (get-in board %) item))))
 
@@ -174,14 +173,11 @@
 
 (defn print-board
   [board]
-  (map #(->> (apply concat) (apply str) (println)) board))
-
-
+  (doseq [line board] (println (map first line))))
 
 (defn -main
   "Receive a filename through args and solve the content"
   [& args]
-  ;(print-board '[[#{1} #{2} #{3}] [#{4} #{5} #{6}] [#{7} #{8} #{9}]])
   (let [board (-> args (first) (load-board-file) (parse-board-from-string))]
     (if (is-board-valid board)
       (let [initial-board (make-board-of-sets board)
