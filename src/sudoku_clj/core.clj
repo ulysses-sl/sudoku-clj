@@ -10,8 +10,8 @@
 (defn is-line-solved
   "Checks if line has permutation of (1..9)"
   [line]
-  (= #{1 2 3 4 5 6 7 8 9}
-     (->> line (apply concat) (set))))
+  (= '[1 2 3 4 5 6 7 8 9]
+     (->> line (apply concat) (sort))))
 
 (defn is-board-solved
   "Checks if all combos in the board is solved"
