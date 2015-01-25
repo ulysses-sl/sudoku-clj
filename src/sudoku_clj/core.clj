@@ -1,151 +1,7 @@
 (ns sudoku-clj.core
   (:gen-class)
-  (:require [clojure.string :as str]))
-
-;;
-;; Board loading and sanity checking routines
-;;
-
-(def board-file "board.txt")
-
-(defn load-board-file
-  []
-  (slurp board-file))
-
-(defn parse-row-from-string
-  "Reconstructs a single row of sudoku board from the string"
-  [row-string]
-  (->> (str/split row-string #" ")
-       (map read-string)
-       (vec)))
-
-(defn parse-board-from-string
-  "Reconstructs a sudoku board from the string"
-  [board-string]
-  (->> board-string
-       (str/split-lines)
-       (map parse-row-from-string)
-       (vec)))
-
-(defn rows
-  "Returns the rows of the board"
-  [board]
-  board)
-
-(defn columns
-  "Returns the columns of the board"
-  [board]
-  (apply map vector board))
-
-(defn group-by-3
-  "Groups the given collection by 3"
-  [coll]
-  (partition 3 coll))
-
-(defn three-threes-from-3-rows
-  "Gets 3x3s from given 3 rows"
-  [rows]
-  (->> rows
-       (map group-by-3)
-       (columns)
-       (map #(apply concat %))))
-
-(defn three-threes
-  "Returns the 3x3s of the board"
-  [board]
-  (->> board
-       (group-by-3)
-       (mapcat three-threes-from-3-rows)))
-
-
-
-(defn has-9
-  "Checks if the collection has 9 items"
-  [coll]
-  (= 9 (count coll)))
-
-(defn is-square-valid
-  "Checks if the given square x is an integer from 0 to 9"
-  [x]
-  (and (integer? x) (<= 0 x 9)))
-
-(defn is-everything-unique
-  "Checks if every item in the collection is unique"
-  [coll]
-  (= coll (distinct coll)))
-
-(defn get-non-zeros
-  "Gets non-zero items from the collection"
-  [coll]
-  (filter #(not= 0 %) coll))
-
-
-
-(defn all-true
-  "Checks if everything in the collection is true"
-  [coll]
-  (reduce #(and %1 %2) true coll))
-
-(defn is-line-valid
-  "Checks if a line has 9 numbers and all the non-zero nums are unique"
-  [line]
-  (and (->> line
-            (map is-square-valid)
-            (all-true))
-       (->> line
-            (get-non-zeros)
-            (is-everything-unique))))
-
-(defn check-all-lines
-  "Checks every line to see if the condition meets"
-  [condition board]
-  (->> board
-       (map condition)
-       (all-true)))
-
-(defn check-board-position
-  "Returns closure for checking the corresponding board positions for condition"
-  [condition position]
-  (fn [board]
-    (->> board
-         (position)
-         (check-all-lines condition))))
-
-(defn check-board
-  "Checks the entire board for the condition"
-  [condition board]
-  (and ((check-board-position condition rows) board)
-       ((check-board-position condition columns) board)
-       ((check-board-position condition three-threes) board)))
-
-(defn is-board-valid
-  [board]
-  (check-board is-line-valid board))
-
-;;
-;; Board preprocess
-;;
-
-(def set-of-possible-nums #{1 2 3 4 5 6 7 8 9})
-
-(defn make-guess-set-from-number
-  "Return guess sets if 0 or singleton set of itself otherwise"
-  [num]
-  (if (= 0 num)
-    set-of-possible-nums
-    #{num}))
-
-(defn make-row-of-sets
-  [row]
-  (->> row
-       (map make-guess-set-from-number)
-       (vec)))
-
-(defn make-board-of-sets
-  [board]
-  (->> board
-       (map make-row-of-sets)
-       (vec)))
+  (:require [clojure.string :as str]
+            [sudoku-clj.loader :refer :all]))
 
 ;;
 ;; Check board consistency
@@ -219,25 +75,118 @@
             (distinct))]
     (remove #(= coord %) adjacents)))
 
-;;(some #(= 0 (count %)) coll)
+(defn get-item-sharing-neighbors
+  "list of neighbors"
+  [board coord item]
+  (println (apply str coord))
+  (->> (get-related-squares coord)
+       (filter #(contains? (get-in board %) item))))
+
+(defn get-influence-on-neighbors
+  "how many neighbors share this number"
+  [board coord item]
+  (->> (get-item-sharing-neighbors board coord item)
+       (count)))
+
+(defn get-constrained-neighbors
+  "how many neighbors are zero-holed (<= 1 after propagation)"
+  [board coord item]
+  (->> (get-item-sharing-neighbors board coord item)
+       (filter #(->> (get-in board %) (count) (>= 2)))))
+
+(defn remove-unless-fail
+  "remove item from the set at coord and return board unless it becomes empty"
+  [board coord item]
+  (let [new-square (disj (get-square board coord) item)]
+    (if (seq new-square)
+      (set-square board coord new-square)
+      nil)))
+
+(defn remove-everything-unless-fail
+  "remove item from all listed coords unless any becomes empty"
+  [board coord-list item]
+  (if (empty? coord-list)
+    board
+    (let [coord (first coord-list)
+          next-coords (rest coord-list)
+          new-board (remove-unless-fail board coord item)]
+      (if (not-empty new-board)
+        (remove-everything-unless-fail new-board next-coords item)
+        nil))))
+
+(def queue (clojure.lang.PersistentQueue/EMPTY))
+
+(defn add-to-queue
+  [original-queue additions]
+  (if (empty? additions)
+    original-queue
+    (add-to-queue (conj original-queue (first additions)) (rest additions))))
+
+(defn propagate-consistency
+  "improve board until no longer can be improved"
+  [board coords-to-check]
+  (if (empty? coords-to-check)
+    board
+    (let [coord (first coords-to-check)
+          next-coords (pop coords-to-check)
+          num (first (get-square board coord))
+          neighbors (get-item-sharing-neighbors board coord num)
+          const-neighbors (get-constrained-neighbors board coord num)
+          new-board (remove-everything-unless-fail board neighbors num)]
+      (if new-board
+        (propagate-consistency new-board (add-to-queue next-coords const-neighbors))
+        nil))))
+
+(defn enforce-consistency
+  "Returns enforced board or nil if impossible"
+  [board]
+  (->> board-positions
+       (filter #(->> (get-square board %) (count) (== 1)))
+       (add-to-queue queue)
+       (propagate-consistency board)))
 
 (defn mrv
-  "minimum remaining values"
-  []
-  false)
+  "returns coords of (n > 1) squares sorted by minimum remaining values"
+  [board]
+  (->> board-positions
+       (filter #(->> (get-square board %) (count) (> 1)))
+       (sort-by #(->> (get-square board %) (count)))
+       (add-to-queue queue)))
 
 (defn lcv
-  "least constraining values"
-  []
-  false)
+  "returns values of the square sorted by least constraining values"
+  [board coord]
+  (->> (get-square board coord)
+       (sort-by #(get-influence-on-neighbors board coord))
+       (add-to-queue queue)))
 
 (defn backtrack
-  []
-  '[])
+  [board]
+  (let [consistent-board (enforce-consistency board)]
+    (if (is-board-solved consistent-board)
+      consistent-board
+      (->> (for [coord (mrv consistent-board)
+                 val (lcv consistent-board coord)
+                 updated-board (set-square consistent-board coord #{val})]
+             (backtrack updated-board))
+           (keep identity)
+           (first)))))
+
+(defn print-board
+  [board]
+  (map #(->> (apply concat) (apply str) (println)) board))
 
 
 
 (defn -main
   "Receive a filename through args and solve the content"
   [& args]
-  (println "Hello, World!"))
+  ;(print-board '[[#{1} #{2} #{3}] [#{4} #{5} #{6}] [#{7} #{8} #{9}]])
+  (let [board (-> args (first) (load-board-file) (parse-board-from-string))]
+    (if (is-board-valid board)
+      (let [initial-board (make-board-of-sets board)
+            finished-board (backtrack initial-board)]
+        (if finished-board
+          (print-board finished-board)
+          (println "Unsolvable!")))
+      (println "Invalid board!"))))

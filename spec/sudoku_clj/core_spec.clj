@@ -1,5 +1,6 @@
 (ns sudoku-clj.core-spec
   (:require [speclj.core :refer :all]
+            [sudoku-clj.loader :refer :all]
             [sudoku-clj.core :refer :all]))
 
 (describe "parse-row-from-string"
@@ -67,12 +68,6 @@
 
 
 
-(describe "all-true"
-  (it "returns true when everything in the collection is true"
-    (should (all-true '(true true true))))
-
-  (it "returns false when anything in the collection is not true"
-    (should-not (all-true '(true false true)))))
 
 (describe "is-line-valid"
   (it "returns true on a vector with 9 valid unique squares"
@@ -80,7 +75,7 @@
 
 (describe "check-all-lines"
   (it "returns true when all the lines pass the check function"
-    (should (check-all-lines all-true [[true true] [true true]]))))
+    (should (check-all-lines #(every? pos? %) [[4 1] [2 3]]))))
 
 (describe "check-board-position"
   (it "returns true when all the rows pass the check function"
@@ -94,7 +89,7 @@
 
 (describe "check-board"
   (it "returns true when the entire board passes the check function"
-    (should (check-board all-true [[true true true] [true true true] [true true true]]))))
+    (should (check-board #(every? pos? %) [[1 2 3] [1 2 3] [1 2 3]]))))
 
 
 
@@ -149,9 +144,47 @@
   (it "returns all related coords on row, column, 3x3 without itself"
     (should= combined-3-5 (get-related-squares [3 5]))))
 
+(describe "remove-unless-fail"
+  (it "removes item from the set at coord and return board if the set is not empty"
+    (should= '[[#{1 2} #{3 4}] [#{5 6} #{7}]] (remove-unless-fail '[[#{1 2} #{3 4}] [#{5 6} #{7 8}]] '[1 1] 8)))
+
+  (it "return nil if the set would become empty when you remove the item"
+    (should= nil (remove-unless-fail '[[#{1 2} #{3 4}] [#{5 6} #{8}]] '[1 1] 8))))
+
+(def testboard-1
+  '[[#{} #{} #{} #{} #{} #{} #{} #{} #{}]
+    [#{} #{} #{} #{} #{} #{} #{} #{} #{}]
+    [#{} #{} #{} #{} #{} #{} #{} #{} #{}]
+    [#{} #{} #{} #{} #{} #{} #{} #{} #{}]
+    [#{} #{} #{} #{} #{} #{} #{} #{} #{}]
+    [#{} #{} #{} #{} #{} #{} #{} #{} #{}]
+    [#{} #{} #{} #{} #{} #{} #{} #{} #{}]
+    [#{} #{} #{} #{} #{} #{} #{} #{} #{}]
+    [#{} #{} #{} #{} #{} #{} #{} #{} #{}]])
+
+(def testboard-2
+  '[[#{} #{2} #{3} #{1 2} #{2} #{3} #{1} #{2} #{3}]
+    [#{2} #{3} #{1 2 3} #{} #{} #{} #{} #{} #{}]
+    [#{3} #{1 2 3} #{2} #{} #{} #{} #{} #{} #{}]
+    [#{1 2} #{} #{} #{} #{} #{} #{} #{} #{}]
+    [#{2} #{} #{} #{} #{} #{} #{} #{} #{}]
+    [#{3} #{} #{} #{} #{} #{} #{} #{} #{}]
+    [#{1} #{} #{} #{} #{} #{} #{} #{} #{}]
+    [#{2} #{} #{} #{} #{} #{} #{} #{} #{}]
+    [#{3} #{} #{} #{} #{} #{} #{} #{} #{}]])
 
 
 
+(describe "get-item-sharing-neighbors"
+  (it "returns the list of coords of item sharing neighbors"
+    (should= #{[0 3] [0 6] [1 2] [2 1] [3 0] [6 0]} (set (get-item-sharing-neighbors testboard-2 [0 0] 1)))))
 
+(describe "get-influence-on-neighbors"
+  (it "measures the constraints the number enforces on adjacent boards"
+    (should= 6 (get-influence-on-neighbors testboard-2 [0 0] 1))))
+
+(describe "get-constrained-neighbors"
+  (it "measures the constraints the number enforces on adjacent boards"
+    (should= #{[0 3] [0 6] [3 0] [6 0]} (set (get-constrained-neighbors testboard-2 [0 0] 1)))))
 
 (run-specs)
