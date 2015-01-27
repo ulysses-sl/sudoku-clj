@@ -188,15 +188,14 @@
                                (propagate-consistency (conj queue coord)))]
          updated-board)
        (partition 9)
-       (map vec)
-       (seq)))
+       (map vec)))
 
 (def visited (atom #{}))
 
 (defn backtrack
   [board]
   (cond
-    (contains? @visited (hash board)) (println "already visited")
+    (contains? @visited (hash board)) nil
     (is-board-solved board) board
     :else (do
             (swap! visited (fn [x] (conj x (hash board))))
