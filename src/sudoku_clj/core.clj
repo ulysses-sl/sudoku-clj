@@ -16,7 +16,9 @@
 (defn is-board-solved
   "Checks if all combos in the board is solved"
   [board]
-  (check-board is-line-solved board))
+  (if board
+    (check-board is-line-solved board)
+    true))
 
 ;; All the board positions
 (def board-positions
@@ -64,16 +66,31 @@
           new-column (range ulc-column (+ ulc-column 3))]
       [new-row new-column])))
 
+(defn get-relatives
+  [coord]
+  (->> `(~(get-member-row coord)
+         ~(get-member-column coord)
+         ~(get-member-three-three coord))
+       (apply concat)
+       (distinct)
+       (remove #(= coord %))))
+
+(defn update-table
+  [table coords]
+  (if (empty? coords)
+    table
+    (let [coord (first coords)
+          next-coords (rest coords)
+          relatives (get-relatives coord)]
+      (update-table (assoc table coord relatives) next-coords))))
+
+(def related-squares
+  (update-table {} board-positions))
+
 (defn get-related-squares
   "Get all related coords on row, column, 3x3 without itself"
   [coord]
-  (let [adjacents
-        (-> (concat
-              (get-member-row coord)
-              (get-member-column coord)
-              (get-member-three-three coord))
-            (distinct))]
-    (remove #(= coord %) adjacents)))
+  (get related-squares coord))
 
 (defn get-item-sharing-neighbors
   "list of neighbors"
@@ -121,6 +138,12 @@
     original-queue
     (add-to-queue (conj original-queue (first additions)) (rest additions))))
 
+(defn print-board
+  [board]
+  (if board
+    (do (doseq [line board] (println (map #(apply str %) line)))
+        (println))))
+
 (defn propagate-consistency
   "improve board until no longer can be improved"
   [board coords-to-check]
@@ -148,32 +171,41 @@
   "returns coords of (n > 1) squares sorted by minimum remaining values"
   [board]
   (->> board-positions
-       (filter #(->> (get-square board %) (count) (> 1)))
-       (sort-by #(->> (get-square board %) (count)))
-       (add-to-queue queue)))
+       (filter #(->> (get-square board %) (count) (< 1)))
+       (sort-by #(->> (get-square board %) (count)))))
 
 (defn lcv
   "returns values of the square sorted by least constraining values"
   [board coord]
   (->> (get-square board coord)
-       (sort-by #(get-influence-on-neighbors board coord))
-       (add-to-queue queue)))
+       (sort-by #(get-influence-on-neighbors board coord %))))
+
+(defn get-child-boards
+  [board]
+  (->> (for [coord (mrv board)
+             val (lcv board coord)
+             updated-board (-> (set-square board coord #{val})
+                               (propagate-consistency (conj queue coord)))]
+         updated-board)
+       (partition 9)
+       (map vec)
+       (seq)))
+
+(def visited (atom #{}))
 
 (defn backtrack
   [board]
-  (let [consistent-board (enforce-consistency board)]
-    (if (is-board-solved consistent-board)
-      consistent-board
-      (->> (for [coord (mrv consistent-board)
-                 val (lcv consistent-board coord)
-                 updated-board (set-square consistent-board coord #{val})]
-             (backtrack updated-board))
-           (keep identity)
-           (first)))))
+  (cond
+    (contains? @visited (hash board)) (println "already visited")
+    (is-board-solved board) board
+    :else (do
+            (swap! visited (fn [x] (conj x (hash board))))
+            (->> (get-child-boards board)
+                 (map backtrack)
+                 (keep identity)
+                 (first)))))
 
-(defn print-board
-  [board]
-  (doseq [line board] (println (map first line))))
+(def argss '["boards/02.txt"])
 
 (defn -main
   "Receive a filename through args and solve the content"
@@ -181,7 +213,7 @@
   (let [board (-> args (first) (load-board-file) (parse-board-from-string))]
     (if (is-board-valid board)
       (let [initial-board (make-board-of-sets board)
-            finished-board (backtrack initial-board)]
+            finished-board (backtrack (enforce-consistency initial-board))]
         (if finished-board
           (print-board finished-board)
           (println "Unsolvable!")))

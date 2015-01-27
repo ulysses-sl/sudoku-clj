@@ -140,8 +140,16 @@
   (it "returns all coords on the same 3x3"
     (should= three-three-3-5 (get-member-three-three [3 5]))))
 
-(describe "get-related-squares"
+(describe "get-relatives"
   (it "returns all related coords on row, column, 3x3 without itself"
+    (should= combined-3-5 (get-relatives [3 5]))))
+
+(describe "update-table"
+  (it "returns updated hash table with relatives mapped to coord"
+    (should= {[0 0] (get-relatives [0 0])} (update-table {} [[0 0]]))))
+
+(describe "get-related-squares"
+  (it "returns all cached related coords on row, column, 3x3 without itself"
     (should= combined-3-5 (get-related-squares [3 5]))))
 
 (describe "remove-unless-fail"
