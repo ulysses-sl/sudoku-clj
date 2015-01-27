@@ -193,27 +193,30 @@
 (def visited (atom #{}))
 
 (defn backtrack
-  [board]
+  [mapper board]
+  ;(print-board board)
   (cond
     (contains? @visited (hash board)) nil
     (is-board-solved board) board
     :else (do
             (swap! visited (fn [x] (conj x (hash board))))
             (->> (get-child-boards board)
-                 (map backtrack)
+                 (mapper #(backtrack map %))
                  (keep identity)
                  (first)))))
-
-(def argss '["boards/02.txt"])
 
 (defn -main
   "Receive a filename through args and solve the content"
   [& args]
-  (let [board (-> args (first) (load-board-file) (parse-board-from-string))]
-    (if (is-board-valid board)
-      (let [initial-board (make-board-of-sets board)
-            finished-board (backtrack (enforce-consistency initial-board))]
-        (if finished-board
-          (print-board finished-board)
-          (println "Unsolvable!")))
-      (println "Invalid board!"))))
+  (if (not-empty args)
+    (let [board (-> args (first) (load-board-file) (parse-board-from-string))]
+      (if (is-board-valid board)
+        (let [initial-board (make-board-of-sets board)
+              finished-board (backtrack map (enforce-consistency initial-board))]
+          (if finished-board
+            (print-board finished-board)
+            (println "Unsolvable!"))
+          (shutdown-agents)
+          (System/exit 0))
+        (println "Invalid board!")))
+    (println "Syntax: sudoku-clj [filename]")))
