@@ -138,11 +138,14 @@
     original-queue
     (add-to-queue (conj original-queue (first additions)) (rest additions))))
 
-(defn print-board
+(defn stringify-line
+  [line]
+  (str/join " " (map #(apply str %) line)))
+
+(defn stringify-board
   [board]
   (if board
-    (do (doseq [line board] (println (map #(apply str %) line)))
-        (println))))
+    (str/join "\n" (map stringify-line board))))
 
 (defn propagate-consistency
   "improve board until no longer can be improved"
@@ -193,7 +196,7 @@
 (def visited (atom #{}))
 
 (defn backtrack
-  [mapper board]
+  [board]
   ;(print-board board)
   (cond
     (contains? @visited (hash board)) nil
@@ -201,22 +204,30 @@
     :else (do
             (swap! visited (fn [x] (conj x (hash board))))
             (->> (get-child-boards board)
-                 (mapper #(backtrack map %))
+                 (map #(backtrack %))
                  (keep identity)
                  (first)))))
+
+(defn solve-board
+  [filename]
+  (let [board (-> filename (load-board-file) (parse-board-from-string))]
+    (str filename
+         "\n"
+         (if (is-board-valid board)
+           (let [initial-board (make-board-of-sets board)
+                 finished-board (backtrack (enforce-consistency initial-board))]
+             (if finished-board
+               (stringify-board finished-board)
+               "Unsolvable!"))
+           "Invalid board!")
+         "\n")))
 
 (defn -main
   "Receive a filename through args and solve the content"
   [& args]
   (if (not-empty args)
-    (let [board (-> args (first) (load-board-file) (parse-board-from-string))]
-      (if (is-board-valid board)
-        (let [initial-board (make-board-of-sets board)
-              finished-board (backtrack map (enforce-consistency initial-board))]
-          (if finished-board
-            (print-board finished-board)
-            (println "Unsolvable!"))
-          (shutdown-agents)
-          (System/exit 0))
-        (println "Invalid board!")))
-    (println "Syntax: sudoku-clj [filename]")))
+    (doseq [board (doall (pmap solve-board args))]
+      (println board))
+    (println "Syntax: sudoku-clj [filename1 ...]"))
+  (shutdown-agents))
+  ;(System/exit 0))
